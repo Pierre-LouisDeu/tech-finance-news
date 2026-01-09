@@ -55,7 +55,7 @@ planning:
   stories:
     status: in_progress
     directory: docs/stories/
-    count: 18
+    count: 19
     breakdown:
       - epic: "Epic 1: Project Setup"
         stories: ["1.1", "1.2", "1.3"]
@@ -71,8 +71,8 @@ planning:
         stories: ["6.1", "6.2"]
       - epic: "Epic 7: Deployment"
         stories: ["7.1", "7.2"]
-      - epic: "Epic 8: Daily Digest & Reporting"
-        stories: ["8.1", "8.2"]
+      - epic: "Epic 8: Daily Digest & Production"
+        stories: ["8.1", "8.2", "8.3"]
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PHASE 4: IMPLEMENTATION
@@ -83,7 +83,7 @@ implementation:
   current_sprint:
     number: 8
     status: in_progress
-    epic: "Epic 8: Daily Digest & Reporting"
+    epic: "Epic 8: Daily Digest & Production"
     stories:
       - id: "8.1"
         title: "Daily News Digest"
@@ -91,6 +91,9 @@ implementation:
       - id: "8.2"
         title: "Daily Briefing Archive Section"
         status: completed
+      - id: "8.3"
+        title: "PostgreSQL Migration & Production Cron"
+        status: ready
 
   completed_sprints:
     - number: 1
@@ -132,9 +135,9 @@ implementation:
 # WORKFLOW NAVIGATION
 # ═══════════════════════════════════════════════════════════════════════════════
 next_action:
-  workflow: "none"
-  description: "Sprint 8 complete - Daily Briefing Section implemented"
-  notes: "Run manual tests on production to validate"
+  workflow: "dev-story"
+  description: "Implement Story 8.3 - PostgreSQL Migration & Production Cron"
+  story: "docs/stories/8.3-postgresql-migration.md"
 
 history:
   - date: "2026-01-07"
