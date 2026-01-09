@@ -1,0 +1,56 @@
+# Tech Finance News Aggregator
+# Docker Compose configuration for production deployment
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tech-finance-news
+    restart: unless-stopped
+
+    # Environment variables
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - DB_PATH=/app/data/news.db
+      - TZ=Europe/Paris
+
+    # Persistent data
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    # Logging
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('healthy')"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  app-data:
+    driver: local
+  app-logs:
+    driver: local

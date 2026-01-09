@@ -1,0 +1,55 @@
+{
+  "name": "tech-finance-news",
+  "version": "1.0.0",
+  "description": "Automated tech finance news aggregator - scrapes Zone Bourse, summarizes with AI, pushes to Notion",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:scheduled": "node dist/index.js --scheduled",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "pipeline": "tsx src/pipeline.ts",
+    "scheduler": "tsx src/index.ts --scheduled"
+  },
+  "keywords": [
+    "finance",
+    "news",
+    "scraper",
+    "notion",
+    "openai",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.14",
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "openai": "^4.52.0",
+    "pino": "^9.2.0",
+    "pino-pretty": "^11.2.1",
+    "playwright": "^1.45.0",
+    "rss-parser": "^3.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/node": "^20.14.9",
+    "@types/node-cron": "^3.0.11",
+    "@typescript-eslint/eslint-plugin": "^7.14.1",
+    "@typescript-eslint/parser": "^7.14.1",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.2",
+    "tsx": "^4.15.7",
+    "typescript": "^5.5.2"
+  }
+}

@@ -1,0 +1,202 @@
+# BMM Workflow Status Tracker
+# Project initialized: 2026-01-07
+# Type: Greenfield | API/Backend | Node.js/TypeScript | Medium Complexity
+
+project:
+  name: "Tech Finance News Aggregator"
+  type: api-backend
+  stack: nodejs-typescript
+  level: greenfield
+  complexity: medium
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 1: DISCOVERY
+# ═══════════════════════════════════════════════════════════════════════════════
+discovery:
+  status: completed
+
+  product_brief:
+    status: completed
+    file: docs/product-brief.md
+    notes: "Scraper Zone Bourse + résumé IA + push Notion"
+
+  research:
+    status: skipped
+    notes: "Non requis - scope clair"
+    findings: []
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 2: SOLUTIONING
+# ═══════════════════════════════════════════════════════════════════════════════
+solutioning:
+  status: completed
+
+  architecture:
+    status: completed
+    file: docs/architecture.md
+    notes: "Playwright + SQLite + GPT-4o-mini + VPS Hetzner"
+
+  tech_specs:
+    status: skipped
+    files: []
+    notes: "Détails inclus dans architecture - suffisant pour ce projet"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 3: PLANNING
+# ═══════════════════════════════════════════════════════════════════════════════
+planning:
+  status: completed
+
+  epics:
+    status: completed
+    file: docs/epics.md
+    count: 7
+
+  stories:
+    status: in_progress
+    directory: docs/stories/
+    count: 18
+    breakdown:
+      - epic: "Epic 1: Project Setup"
+        stories: ["1.1", "1.2", "1.3"]
+      - epic: "Epic 2: Scraper Module"
+        stories: ["2.1", "2.2", "2.3"]
+      - epic: "Epic 3: Filter Module"
+        stories: ["3.1", "3.2", "3.3"]
+      - epic: "Epic 4: Summarizer Module"
+        stories: ["4.1", "4.2"]
+      - epic: "Epic 5: Notion Integration"
+        stories: ["5.1", "5.2"]
+      - epic: "Epic 6: Pipeline & Scheduling"
+        stories: ["6.1", "6.2"]
+      - epic: "Epic 7: Deployment"
+        stories: ["7.1", "7.2"]
+      - epic: "Epic 8: Daily Digest & Reporting"
+        stories: ["8.1", "8.2"]
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# PHASE 4: IMPLEMENTATION
+# ═══════════════════════════════════════════════════════════════════════════════
+implementation:
+  status: in_progress
+
+  current_sprint:
+    number: 8
+    status: in_progress
+    epic: "Epic 8: Daily Digest & Reporting"
+    stories:
+      - id: "8.1"
+        title: "Daily News Digest"
+        status: completed
+      - id: "8.2"
+        title: "Daily Briefing Archive Section"
+        status: completed
+
+  completed_sprints:
+    - number: 1
+      epic: "Epic 1: Project Setup & Infrastructure"
+      stories: ["1.1", "1.2", "1.3"]
+      completed_at: "2026-01-08"
+    - number: 2
+      epic: "Epic 2: Scraper Module (News Fetching)"
+      stories: ["2.1", "2.2", "2.3"]
+      completed_at: "2026-01-08"
+      notes: "Used RSS feeds (ABC Bourse) instead of Zone Bourse web scraping"
+    - number: 3
+      epic: "Epic 3: Filter Module"
+      stories: ["3.1", "3.2", "3.3"]
+      completed_at: "2026-01-08"
+      notes: "Keyword matcher with scoring + optional AI validation"
+    - number: 4
+      epic: "Epic 4: Summarizer Module"
+      stories: ["4.1", "4.2"]
+      completed_at: "2026-01-08"
+      notes: "OpenAI GPT summarization (short + detailed) with retry logic"
+    - number: 5
+      epic: "Epic 5: Notion Integration"
+      stories: ["5.1", "5.2"]
+      completed_at: "2026-01-08"
+      notes: "Notion API client with page creation and property mapping"
+    - number: 6
+      epic: "Epic 6: Pipeline & Scheduling"
+      stories: ["6.1", "6.2"]
+      completed_at: "2026-01-08"
+      notes: "Full pipeline orchestration with cron scheduling"
+    - number: 7
+      epic: "Epic 7: Deployment"
+      stories: ["7.1", "7.2"]
+      completed_at: "2026-01-08"
+      notes: "Docker multi-stage build + VPS deployment guide"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WORKFLOW NAVIGATION
+# ═══════════════════════════════════════════════════════════════════════════════
+next_action:
+  workflow: "none"
+  description: "Sprint 8 complete - Daily Briefing Section implemented"
+  notes: "Run manual tests on production to validate"
+
+history:
+  - date: "2026-01-07"
+    action: "Project initialized"
+    details: "Greenfield Node.js/TypeScript API/Backend, Medium complexity"
+  - date: "2026-01-07"
+    action: "Product Brief created"
+    details: "Tech Finance News Aggregator - Zone Bourse scraper + GPT summaries + Notion"
+  - date: "2026-01-07"
+    action: "Architecture created"
+    details: "Playwright, SQLite, GPT-4o-mini, Pino logging, VPS Hetzner, exponential backoff"
+  - date: "2026-01-07"
+    action: "Epics & Stories created"
+    details: "7 epics, 16 stories, estimated 8 sprints"
+  - date: "2026-01-08"
+    action: "Story 1.1 completed"
+    details: "Project initialized with TypeScript, ESLint, Prettier, directory structure"
+  - date: "2026-01-08"
+    action: "Story 1.2 completed"
+    details: "SQLite database with schema, indexes, and CRUD queries"
+  - date: "2026-01-08"
+    action: "Story 2.1 completed"
+    details: "Playwright browser setup with anti-bot headers, user-agent, rate limiting"
+  - date: "2026-01-08"
+    action: "Story 2.2 completed"
+    details: "Switched from Zone Bourse scraping to RSS feeds (ABC Bourse) - 40 articles fetched in 103ms"
+  - date: "2026-01-08"
+    action: "Story 2.3 completed"
+    details: "Content extraction with Playwright - 3 articles tested, avg 2100 chars content"
+  - date: "2026-01-08"
+    action: "Sprint 2 completed"
+    details: "Scraper Module complete - RSS fetching + content extraction working"
+  - date: "2026-01-08"
+    action: "Sprint 3 completed"
+    details: "Filter Module - keyword matcher (weighted scoring) + AI validation (OpenAI GPT)"
+  - date: "2026-01-08"
+    action: "Sprint 4 completed"
+    details: "Summarizer Module - GPT-4o-mini short + detailed summaries with retry logic"
+  - date: "2026-01-08"
+    action: "Sprint 5 completed"
+    details: "Notion Integration - API client, page creation with properties and content blocks"
+  - date: "2026-01-08"
+    action: "Sprint 6 completed"
+    details: "Pipeline & Scheduling - full orchestration with CLI and cron support"
+  - date: "2026-01-08"
+    action: "Sprint 7 completed"
+    details: "Deployment - Docker multi-stage build, docker-compose, VPS guide"
+  - date: "2026-01-08"
+    action: "PROJECT COMPLETE"
+    details: "All 7 sprints completed, 16 stories implemented, ready for production"
+  - date: "2026-01-08"
+    action: "BUGFIX: Notion deduplication"
+    details: "Fixed duplicate pushes caused by concurrent pipeline execution. Added dedup check before each push + prevented pipeline.ts auto-execution when imported."
+  - date: "2026-01-08"
+    action: "ENHANCEMENT: Notion database properties"
+    details: "Added Source, Published Date, Processed Date, URL as database properties (auto-created if missing). Properties now visible in table view."
+  - date: "2026-01-08"
+    action: "FEATURE: Daily Digest"
+    details: "Added daily news digest - aggregates all articles of the day, generates GPT summary of key points, pushes to Notion as 'Daily Digest' page."
+  - date: "2026-01-08"
+    action: "FEATURE: Dokploy deployment"
+    details: "Adapted Dockerfile for Dokploy single-run mode. CRON scheduling handled by Dokploy instead of internal scheduler."
+  - date: "2026-01-09"
+    action: "FEATURE: Daily Briefing Section (Story 8.2)"
+    details: "Separate briefing archive with deduplication, article links to Notion pages, SQLite daily_briefings table, optional separate Notion DB"
