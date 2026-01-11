@@ -11,7 +11,7 @@
 
 import { fetchRssFeeds, saveScrapedArticles } from './scraper/index.js';
 import { extractArticleContents } from './scraper/content-extractor.js';
-import { filterArticles, matchArticle } from './filter/index.js';
+import { filterArticles } from './filter/index.js';
 import { summarizeArticles, isSummarizationAvailable } from './summarizer/index.js';
 import { pushArticlesToNotion, isNotionAvailable } from './notion/index.js';
 import { runDailyDigest } from './digest/index.js';
@@ -66,7 +66,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
   logger.info({ options }, 'Starting pipeline');
 
   try {
-    initDatabase();
+    await initDatabase();
 
     // Step 1: Fetch articles from RSS feeds
     if (!skipScrape) {
@@ -84,7 +84,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     // Step 2: Extract full article content
     if (!skipContent) {
       logger.info('Step 2: Extracting article content...');
-      const articlesToExtract = getArticlesWithEmptyContent(maxArticles);
+      const articlesToExtract = await getArticlesWithEmptyContent(maxArticles);
 
       if (articlesToExtract.length > 0 && !dryRun) {
         const contentResult = await extractArticleContents({
@@ -104,7 +104,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     // Step 3: Filter articles by tech keywords
     if (!skipFilter) {
       logger.info('Step 3: Filtering articles...');
-      const articlesToFilter = getArticlesNeedingProcessing('filtered');
+      const articlesToFilter = await getArticlesNeedingProcessing('filtered');
 
       if (articlesToFilter.length > 0) {
         const { matched, rejected, results } = filterArticles(articlesToFilter);
@@ -114,23 +114,23 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
           // Log filter results
           for (const article of matched) {
             const matchResult = results.get(article.id);
-            logProcessing(article.id, 'filtered', 'success');
-            logger.debug({
-              id: article.id,
-              score: matchResult?.score,
-              keywords: matchResult?.matchedKeywords.length,
-            }, 'Article passed filter');
+            await logProcessing(article.id, 'filtered', 'success');
+            logger.debug(
+              {
+                id: article.id,
+                score: matchResult?.score,
+                keywords: matchResult?.matchedKeywords.length,
+              },
+              'Article passed filter'
+            );
           }
 
           for (const article of rejected) {
-            logProcessing(article.id, 'filtered', 'skipped', 'No tech keywords matched');
+            await logProcessing(article.id, 'filtered', 'skipped', 'No tech keywords matched');
           }
         }
 
-        logger.info(
-          { matched: matched.length, rejected: rejected.length },
-          'Filtering complete'
-        );
+        logger.info({ matched: matched.length, rejected: rejected.length }, 'Filtering complete');
       } else {
         logger.info('No articles need filtering');
       }
@@ -143,12 +143,10 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
       if (!isSummarizationAvailable()) {
         logger.warn('OpenAI API key not configured, skipping summarization');
       } else {
-        const articlesToSummarize = getArticlesNeedingProcessing('summarized');
+        const articlesToSummarize = await getArticlesNeedingProcessing('summarized');
 
         if (articlesToSummarize.length > 0 && !dryRun) {
-          const summaryResult = await summarizeArticles(
-            articlesToSummarize.slice(0, maxArticles)
-          );
+          const summaryResult = await summarizeArticles(articlesToSummarize.slice(0, maxArticles));
           result.summarized = summaryResult.successful;
           result.errors += summaryResult.failed;
 
@@ -169,12 +167,10 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
       if (!isNotionAvailable()) {
         logger.warn('Notion not configured, skipping push');
       } else {
-        const articlesToPush = getUnsyncedArticles();
+        const articlesToPush = await getUnsyncedArticles();
 
         if (articlesToPush.length > 0 && !dryRun) {
-          const pushResult = await pushArticlesToNotion(
-            articlesToPush.slice(0, maxArticles)
-          );
+          const pushResult = await pushArticlesToNotion(articlesToPush.slice(0, maxArticles));
           result.pushed = pushResult.successful;
           result.errors += pushResult.failed;
 
@@ -206,7 +202,7 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     }
 
     // Final stats
-    const stats = getStats();
+    const stats = await getStats();
     result.durationMs = Date.now() - startTime;
 
     logger.info(
@@ -226,8 +222,6 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     logger.error({ error }, 'Pipeline failed');
     result.errors++;
     throw error;
-  } finally {
-    closeDatabase();
   }
 }
 
@@ -264,6 +258,7 @@ async function main(): Promise<void> {
   }
 
   try {
+    await initDatabase();
     const result = await runPipeline(options);
 
     logger.info('');
@@ -277,6 +272,8 @@ async function main(): Promise<void> {
   } catch (error) {
     logger.fatal({ error }, 'Pipeline failed');
     process.exit(1);
+  } finally {
+    await closeDatabase();
   }
 }
 

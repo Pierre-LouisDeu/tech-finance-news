@@ -194,7 +194,7 @@ export async function scrapeZoneBourse(options: {
         for (const listing of listings) {
           try {
             // Check if already exists
-            if (articleExistsByUrl(listing.url)) {
+            if (await articleExistsByUrl(listing.url)) {
               logger.debug({ url: listing.url }, 'Article already exists, skipping');
               continue;
             }
@@ -264,9 +264,9 @@ export async function saveScrapedArticles(articles: Article[]): Promise<number> 
 
   for (const article of articles) {
     try {
-      if (!articleExistsByUrl(article.url)) {
-        insertArticle(article);
-        logProcessing(article.id, 'scraped', 'success');
+      if (!(await articleExistsByUrl(article.url))) {
+        await insertArticle(article);
+        await logProcessing(article.id, 'scraped', 'success');
         saved++;
         logger.debug({ id: article.id }, 'Article saved');
       }

@@ -2,9 +2,16 @@
 
 Guide de déploiement du Tech Finance News Aggregator.
 
+## Architecture Production
+
+L'application utilise :
+- **PostgreSQL** comme base de données externe
+- **Crontab serveur** pour le scheduling (pas de scheduler interne)
+- **One-shot execution** : chaque exécution traite les articles et se termine
+
 ## Options de déploiement
 
-1. **Dokploy** (recommandé) - PaaS self-hosted avec CRON intégré
+1. **Dokploy + PostgreSQL** (recommandé) - PaaS self-hosted
 2. **Docker Compose** - Déploiement manuel sur VPS
 
 ---
@@ -14,19 +21,34 @@ Guide de déploiement du Tech Finance News Aggregator.
 ## Prérequis Dokploy
 
 - Instance Dokploy installée sur votre serveur
+- PostgreSQL installé sur le serveur (ou service PostgreSQL Dokploy)
 - Compte OpenAI avec API key
 - Compte Notion avec integration configurée
 
 ## Configuration Dokploy
 
-### 1. Créer une nouvelle application
+### 1. Créer la base de données PostgreSQL
+
+```bash
+# Sur le serveur
+sudo -u postgres psql
+
+CREATE DATABASE tech_finance_news;
+CREATE USER techfinance WITH PASSWORD 'votre_mot_de_passe_securise';
+GRANT ALL PRIVILEGES ON DATABASE tech_finance_news TO techfinance;
+\c tech_finance_news
+GRANT ALL ON SCHEMA public TO techfinance;
+\q
+```
+
+### 2. Créer l'application dans Dokploy
 
 Dans Dokploy :
 1. Créer un nouveau projet
 2. Ajouter une application de type "Docker"
-3. Connecter votre repository Git ou uploader le code
+3. Connecter votre repository Git
 
-### 2. Variables d'environnement
+### 3. Variables d'environnement
 
 Ajouter ces variables dans Dokploy > Settings > Environment :
 
@@ -34,45 +56,67 @@ Ajouter ces variables dans Dokploy > Settings > Environment :
 OPENAI_API_KEY=sk-...
 NOTION_API_KEY=secret_...
 NOTION_DATABASE_ID=...
+DATABASE_URL=postgresql://techfinance:votre_mot_de_passe@localhost:5432/tech_finance_news
 NODE_ENV=production
-DB_PATH=/app/data/news.db
 TZ=Europe/Paris
 ```
 
-### 3. Configurer le volume persistant
+### 4. Configurer le CRON serveur
 
-Dans Dokploy > Settings > Volumes :
-- Source: `/app/data`
-- Ceci persiste la base SQLite entre les redémarrages
+L'application n'a plus de scheduler interne. Configurez le crontab du serveur :
 
-### 4. Configurer le CRON
+```bash
+# Éditer le crontab
+crontab -e
 
-Dans Dokploy > Settings > Advanced > Cron Job :
+# Ajouter les lignes suivantes (ajustez le chemin)
+SHELL=/bin/bash
+TZ=Europe/Paris
 
-```
-# Exécution quotidienne à 8h du matin
-0 8 * * *
-```
-
-Ou pour plusieurs exécutions par jour :
-```
-# À 8h, 12h et 18h
-0 8,12,18 * * *
+# Tech Finance News Pipeline - Lun-Ven à 8h, 11h, 14h, 17h, 20h
+0 8,11,14,17,20 * * 1-5 /opt/tech-finance/scripts/run-pipeline.sh >> /var/log/tech-finance.log 2>&1
 ```
 
-### 5. Déployer
+### 5. Script de démarrage
+
+Créez le script `/opt/tech-finance/scripts/run-pipeline.sh` :
+
+```bash
+#!/bin/bash
+set -e
+
+# Charger l'environnement
+source /opt/tech-finance/.env
+
+# Exécuter le pipeline via Docker
+docker run --rm \
+  --network host \
+  -e DATABASE_URL="$DATABASE_URL" \
+  -e OPENAI_API_KEY="$OPENAI_API_KEY" \
+  -e NOTION_API_KEY="$NOTION_API_KEY" \
+  -e NOTION_DATABASE_ID="$NOTION_DATABASE_ID" \
+  -e TZ="$TZ" \
+  tech-finance-news:latest \
+  node dist/index.js --run
+
+echo "[$(date)] Pipeline completed"
+```
+
+### 6. Déployer
 
 Cliquer sur "Deploy" - Dokploy va :
 1. Build l'image Docker
-2. Lancer le container
-3. Exécuter le pipeline selon le CRON configuré
+2. L'image reste prête, le cron déclenchera l'exécution
 
-### 6. Vérifier les logs
+### 7. Vérifier les logs
 
-Dans Dokploy > Logs, vous verrez :
-- Les exécutions du pipeline
-- Le nombre d'articles traités
-- Le digest quotidien généré
+```bash
+# Logs du pipeline
+tail -f /var/log/tech-finance.log
+
+# Logs du conteneur (si en cours)
+docker logs tech-finance-news
+```
 
 ---
 
@@ -127,6 +171,7 @@ Variables requises :
 - `OPENAI_API_KEY` - Clé API OpenAI
 - `NOTION_API_KEY` - Token d'intégration Notion
 - `NOTION_DATABASE_ID` - ID de la base Notion
+- `DATABASE_URL` - URL de connexion PostgreSQL (fournie par docker-compose pour dev local)
 
 ### Configurer la base Notion
 
@@ -207,13 +252,22 @@ docker compose exec app cat /app/data/news.db > backup.db
 
 ### Modifier le planning
 
-Éditer `CRON_SCHEDULE` dans `.env` :
+Le scheduling est géré via le crontab du serveur (pas de scheduler interne) :
+
 ```bash
+# Éditer le crontab
+crontab -e
+
+# Exemples de configurations
+
 # Toutes les 2 heures de 8h à 20h, lundi-vendredi
-CRON_SCHEDULE=0 8,10,12,14,16,18,20 * * 1-5
+0 8,10,12,14,16,18,20 * * 1-5 /chemin/vers/run-pipeline.sh
 
 # Toutes les 4 heures
-CRON_SCHEDULE=0 */4 * * *
+0 */4 * * * /chemin/vers/run-pipeline.sh
+
+# Configuration par défaut (8h, 11h, 14h, 17h, 20h lun-ven)
+0 8,11,14,17,20 * * 1-5 /chemin/vers/run-pipeline.sh
 ```
 
 ### Modifier les mots-clés

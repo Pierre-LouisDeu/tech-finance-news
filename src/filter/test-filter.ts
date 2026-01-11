@@ -5,8 +5,7 @@
  */
 
 import { matchArticle, filterArticles, DEFAULT_FILTER_CONFIG } from './matcher.js';
-import { initDatabase, closeDatabase } from '../db/index.js';
-import { getArticlesWithEmptyContent, getArticleById } from '../db/queries.js';
+import { initDatabase, closeDatabase, query } from '../db/index.js';
 import { logger } from '../utils/logger.js';
 import type { Article } from '../types/index.js';
 
@@ -77,17 +76,10 @@ async function testFilter(): Promise<void> {
   logger.info('=== Testing with real articles from database ===');
 
   try {
-    initDatabase();
+    await initDatabase();
 
     // Get articles with content
-    const db = (await import('../db/index.js')).getDatabase();
-    const stmt = db.prepare(`
-      SELECT * FROM articles
-      WHERE content IS NOT NULL AND content != ''
-      ORDER BY published_at DESC
-      LIMIT 10
-    `);
-    const rows = stmt.all() as Array<{
+    const rows = await query<{
       id: string;
       title: string;
       url: string;
@@ -95,7 +87,12 @@ async function testFilter(): Promise<void> {
       published_at: string;
       source: string;
       created_at: string;
-    }>;
+    }>(`
+      SELECT * FROM articles
+      WHERE content IS NOT NULL AND content != ''
+      ORDER BY published_at DESC
+      LIMIT 10
+    `);
 
     const realArticles: Article[] = rows.map((row) => ({
       id: row.id,
@@ -142,7 +139,7 @@ async function testFilter(): Promise<void> {
   } catch (error) {
     logger.error({ error }, 'Database test failed');
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 
   logger.info('=== Filter Module Test Complete ===');

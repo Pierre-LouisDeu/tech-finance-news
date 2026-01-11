@@ -356,8 +356,8 @@ export async function pushToNotion(
     const pageId = response.id;
 
     // Record sync in database
-    recordNotionSync(article.id, pageId);
-    logProcessing(article.id, 'pushed', 'success');
+    await recordNotionSync(article.id, pageId);
+    await logProcessing(article.id, 'pushed', 'success');
 
     logger.info({ articleId: article.id, pageId }, 'Pushed to Notion');
 
@@ -365,7 +365,7 @@ export async function pushToNotion(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error({ error, articleId: article.id }, 'Failed to push to Notion');
-    logProcessing(article.id, 'pushed', 'failed', errorMessage);
+    await logProcessing(article.id, 'pushed', 'failed', errorMessage);
 
     return { success: false, error: errorMessage };
   }
@@ -377,12 +377,12 @@ export async function pushToNotion(
  */
 export async function pushArticleToNotion(article: Article): Promise<NotionPushResult> {
   // Deduplication check - prevent concurrent pushes
-  if (isArticleSynced(article.id)) {
+  if (await isArticleSynced(article.id)) {
     logger.debug({ articleId: article.id }, 'Article already synced to Notion, skipping');
     return { success: true, skipped: true }; // Already synced
   }
 
-  const summary = getSummary(article.id);
+  const summary = await getSummary(article.id);
 
   if (!summary) {
     logger.warn({ articleId: article.id }, 'No summary found for article');

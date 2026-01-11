@@ -162,7 +162,7 @@ export async function extractArticleContents(options: {
   };
 
   // Get articles that need content extraction
-  const articles = options.articles ?? getArticlesWithEmptyContent(limit);
+  const articles = options.articles ?? (await getArticlesWithEmptyContent(limit));
 
   if (articles.length === 0) {
     logger.info('No articles need content extraction');
@@ -187,15 +187,15 @@ export async function extractArticleContents(options: {
       const content = await fetchArticleContent(page, article);
 
       if (content) {
-        updateArticleContent(article.id, content);
-        logProcessing(article.id, 'scraped', 'success');
+        await updateArticleContent(article.id, content);
+        await logProcessing(article.id, 'scraped', 'success');
         result.successful++;
         logger.info(
           { id: article.id, contentLength: content.length },
           'Article content saved'
         );
       } else {
-        logProcessing(article.id, 'scraped', 'failed', 'Content extraction failed');
+        await logProcessing(article.id, 'scraped', 'failed', 'Content extraction failed');
         result.failed++;
       }
 

@@ -51,7 +51,7 @@ export interface DigestResult {
  * Generate daily digest from today's articles
  */
 export async function generateDailyDigest(): Promise<DailyDigest | null> {
-  const articlesWithSummaries = getTodaySyncedArticles();
+  const articlesWithSummaries = await getTodaySyncedArticles();
 
   if (articlesWithSummaries.length === 0) {
     logger.info('No articles synced today, skipping digest');
@@ -250,7 +250,7 @@ export async function runDailyDigest(): Promise<DigestResult> {
     const today = new Date().toISOString().split('T')[0]!;
 
     // Check if briefing already exists for today (deduplication)
-    if (briefingExists(today)) {
+    if (await briefingExists(today)) {
       logger.info({ date: today }, 'Briefing already exists for today, skipping');
       return { success: true };
     }
@@ -262,21 +262,21 @@ export async function runDailyDigest(): Promise<DigestResult> {
     }
 
     // Save briefing to database first
-    saveBriefing({
+    await saveBriefing({
       date: digest.date,
       articleCount: digest.articleCount,
       globalSummary: digest.globalSummary,
     });
 
     // Get articles with their Notion page IDs for linking
-    const articlesWithLinks = getArticlesWithNotionIds(digest.date);
+    const articlesWithLinks = await getArticlesWithNotionIds(digest.date);
 
     // Push to Notion with article links
     const pageId = await createNotionBriefingPage(digest, articlesWithLinks);
 
     // Update database with Notion page ID
     if (pageId) {
-      updateBriefingNotionId(digest.date, pageId);
+      await updateBriefingNotionId(digest.date, pageId);
     }
 
     return {

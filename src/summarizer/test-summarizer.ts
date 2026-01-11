@@ -7,7 +7,7 @@
  */
 
 import { summarizeArticle, summarizeAndSave, isSummarizationAvailable } from './summarizer.js';
-import { initDatabase, closeDatabase, getDatabase } from '../db/index.js';
+import { initDatabase, closeDatabase, query } from '../db/index.js';
 import { getSummary } from '../db/queries.js';
 import { logger } from '../utils/logger.js';
 import type { Article } from '../types/index.js';
@@ -23,17 +23,10 @@ async function testSummarizer(): Promise<void> {
   }
 
   try {
-    initDatabase();
+    await initDatabase();
 
     // Get a real article with content
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      SELECT * FROM articles
-      WHERE content IS NOT NULL AND length(content) > 200
-      ORDER BY published_at DESC
-      LIMIT 1
-    `);
-    const row = stmt.get() as {
+    const rows = await query<{
       id: string;
       title: string;
       url: string;
@@ -41,13 +34,19 @@ async function testSummarizer(): Promise<void> {
       published_at: string;
       source: string;
       created_at: string;
-    } | undefined;
+    }>(`
+      SELECT * FROM articles
+      WHERE content IS NOT NULL AND LENGTH(content) > 200
+      ORDER BY published_at DESC
+      LIMIT 1
+    `);
 
-    if (!row) {
+    if (rows.length === 0) {
       logger.warn('No articles with content found. Run content extraction first.');
       return;
     }
 
+    const row = rows[0]!;
     const article: Article = {
       id: row.id,
       title: row.title,
@@ -82,7 +81,7 @@ async function testSummarizer(): Promise<void> {
       logger.info(result.detailedSummary);
 
       // Verify saved to database
-      const saved = getSummary(article.id);
+      const saved = await getSummary(article.id);
       if (saved) {
         logger.info({ savedAt: saved.createdAt }, 'Summary verified in database');
       }
@@ -95,7 +94,7 @@ async function testSummarizer(): Promise<void> {
     logger.error({ error }, 'Summarizer test failed');
     throw error;
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 }
 

@@ -14,10 +14,10 @@ async function testContentExtractor(): Promise<void> {
 
   try {
     // Initialize database
-    initDatabase();
+    await initDatabase();
 
     // Check articles needing content
-    const articlesNeedingContent = getArticlesWithEmptyContent(5);
+    const articlesNeedingContent = await getArticlesWithEmptyContent(5);
     logger.info(
       { count: articlesNeedingContent.length },
       'Articles needing content extraction'
@@ -55,7 +55,7 @@ async function testContentExtractor(): Promise<void> {
     if (result.successful > 0) {
       const firstArticle = articlesNeedingContent[0];
       if (firstArticle) {
-        const updated = getArticleById(firstArticle.id);
+        const updated = await getArticleById(firstArticle.id);
         if (updated) {
           logger.info(
             {
@@ -74,7 +74,7 @@ async function testContentExtractor(): Promise<void> {
     logger.error({ error }, 'Content extractor test failed');
     throw error;
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 }
 

@@ -7,7 +7,7 @@
  */
 
 import { pushArticleToNotion, isNotionAvailable } from './client.js';
-import { initDatabase, closeDatabase, getDatabase } from '../db/index.js';
+import { initDatabase, closeDatabase, query } from '../db/index.js';
 import { getSummary } from '../db/queries.js';
 import { logger } from '../utils/logger.js';
 import type { Article } from '../types/index.js';
@@ -23,17 +23,10 @@ async function testNotion(): Promise<void> {
   }
 
   try {
-    initDatabase();
+    await initDatabase();
 
     // Get an article with a summary
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      SELECT a.* FROM articles a
-      INNER JOIN summaries s ON a.id = s.article_id
-      ORDER BY a.published_at DESC
-      LIMIT 1
-    `);
-    const row = stmt.get() as {
+    const rows = await query<{
       id: string;
       title: string;
       url: string;
@@ -41,13 +34,19 @@ async function testNotion(): Promise<void> {
       published_at: string;
       source: string;
       created_at: string;
-    } | undefined;
+    }>(`
+      SELECT a.* FROM articles a
+      INNER JOIN summaries s ON a.id = s.article_id
+      ORDER BY a.published_at DESC
+      LIMIT 1
+    `);
 
-    if (!row) {
+    if (rows.length === 0) {
       logger.warn('No articles with summaries found. Run summarizer first.');
       return;
     }
 
+    const row = rows[0]!;
     const article: Article = {
       id: row.id,
       title: row.title,
@@ -58,7 +57,7 @@ async function testNotion(): Promise<void> {
       createdAt: new Date(row.created_at),
     };
 
-    const summary = getSummary(article.id);
+    const summary = await getSummary(article.id);
     if (!summary) {
       logger.warn('Summary not found for article');
       return;
@@ -87,7 +86,7 @@ async function testNotion(): Promise<void> {
     logger.error({ error }, 'Notion test failed');
     throw error;
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 }
 

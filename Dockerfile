@@ -1,5 +1,8 @@
 # Tech Finance News Aggregator
 # Multi-stage build for optimized production image
+#
+# This image runs in one-shot mode, designed to be triggered by server crontab
+# Connects to external PostgreSQL database via DATABASE_URL
 
 # ============================================
 # Stage 1: Build
@@ -58,21 +61,16 @@ RUN npx playwright install chromium
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
-# Create data directory
-RUN mkdir -p /app/data && chown -R appuser:appuser /app
+# Create logs directory
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
 
 # Environment variables
 ENV NODE_ENV=production
-ENV DB_PATH=/app/data/news.db
 ENV LOG_LEVEL=info
 
-# Health check (for container orchestrators)
-HEALTHCHECK --interval=5m --timeout=10s --start-period=30s \
-    CMD node -e "console.log('healthy')" || exit 1
-
-# Default command: single run mode (for Dokploy/CRON scheduling)
-# Use --scheduled for continuous internal cron scheduling
+# Default command: one-shot pipeline execution
+# Triggered by server crontab, connects to external PostgreSQL
 CMD ["node", "dist/index.js", "--run"]

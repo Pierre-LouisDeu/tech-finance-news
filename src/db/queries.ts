@@ -1,9 +1,9 @@
 /**
- * Database Queries and Operations
+ * Database Queries and Operations (PostgreSQL)
  */
 
 import crypto from 'crypto';
-import { getDatabase } from './index.js';
+import { query, queryOne } from './index.js';
 import type {
   Article,
   ArticleSource,
@@ -29,139 +29,119 @@ export function generateArticleId(title: string, publishedAt: Date): string {
 /**
  * Check if article exists by ID
  */
-export function articleExists(id: string): boolean {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT 1 FROM articles WHERE id = ?');
-  return stmt.get(id) !== undefined;
+export async function articleExists(id: string): Promise<boolean> {
+  const row = await queryOne('SELECT 1 FROM articles WHERE id = $1', [id]);
+  return row !== null;
 }
 
 /**
  * Check if article exists by URL
  */
-export function articleExistsByUrl(url: string): boolean {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT 1 FROM articles WHERE url = ?');
-  return stmt.get(url) !== undefined;
+export async function articleExistsByUrl(url: string): Promise<boolean> {
+  const row = await queryOne('SELECT 1 FROM articles WHERE url = $1', [url]);
+  return row !== null;
 }
 
 /**
  * Insert a new article
  */
-export function insertArticle(article: Omit<Article, 'createdAt'>): void {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO articles (id, title, url, content, published_at, source)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  stmt.run(
-    article.id,
-    article.title,
-    article.url,
-    article.content,
-    article.publishedAt.toISOString(),
-    article.source
+export async function insertArticle(article: Omit<Article, 'createdAt'>): Promise<void> {
+  await query(
+    `INSERT INTO articles (id, title, url, content, published_at, source)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [article.id, article.title, article.url, article.content, article.publishedAt, article.source]
   );
 }
 
 /**
  * Update article content
  */
-export function updateArticleContent(id: string, content: string): void {
-  const db = getDatabase();
-  const stmt = db.prepare('UPDATE articles SET content = ? WHERE id = ?');
-  stmt.run(content, id);
+export async function updateArticleContent(id: string, content: string): Promise<void> {
+  await query('UPDATE articles SET content = $1 WHERE id = $2', [content, id]);
 }
 
 /**
  * Get articles with empty content
  */
-export function getArticlesWithEmptyContent(limit: number = 50): Article[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT * FROM articles
-    WHERE content IS NULL OR content = ''
-    ORDER BY published_at DESC
-    LIMIT ?
-  `);
-  const rows = stmt.all(limit) as ArticleRow[];
+export async function getArticlesWithEmptyContent(limit: number = 50): Promise<Article[]> {
+  const rows = await query<ArticleRow>(
+    `SELECT * FROM articles
+     WHERE content IS NULL OR content = ''
+     ORDER BY published_at DESC
+     LIMIT $1`,
+    [limit]
+  );
   return rows.map(mapArticleRow);
 }
 
 /**
  * Get article by ID
  */
-export function getArticleById(id: string): Article | null {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT * FROM articles WHERE id = ?');
-  const row = stmt.get(id) as ArticleRow | undefined;
+export async function getArticleById(id: string): Promise<Article | null> {
+  const row = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [id]);
   return row ? mapArticleRow(row) : null;
 }
 
 /**
  * Get articles by stage and status
  */
-export function getArticlesByStage(
+export async function getArticlesByStage(
   stage: ProcessingStage,
   status: ProcessingStatus = 'success'
-): Article[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT DISTINCT a.* FROM articles a
-    INNER JOIN processing_log pl ON a.id = pl.article_id
-    WHERE pl.stage = ? AND pl.status = ?
-    ORDER BY a.published_at DESC
-  `);
-  const rows = stmt.all(stage, status) as ArticleRow[];
+): Promise<Article[]> {
+  const rows = await query<ArticleRow>(
+    `SELECT DISTINCT a.* FROM articles a
+     INNER JOIN processing_log pl ON a.id = pl.article_id
+     WHERE pl.stage = $1 AND pl.status = $2
+     ORDER BY a.published_at DESC`,
+    [stage, status]
+  );
   return rows.map(mapArticleRow);
 }
 
 /**
  * Get articles that need processing at a specific stage
  */
-export function getArticlesNeedingProcessing(stage: ProcessingStage): Article[] {
-  const db = getDatabase();
-
-  // Get articles that have completed the previous stage but not this one
+export async function getArticlesNeedingProcessing(stage: ProcessingStage): Promise<Article[]> {
   const previousStage = getPreviousStage(stage);
 
-  let stmt;
+  let rows: ArticleRow[];
   if (previousStage) {
-    stmt = db.prepare(`
-      SELECT a.* FROM articles a
-      INNER JOIN processing_log pl ON a.id = pl.article_id
-      WHERE pl.stage = ? AND pl.status = 'success'
-      AND a.id NOT IN (
-        SELECT article_id FROM processing_log WHERE stage = ?
-      )
-      ORDER BY a.published_at DESC
-    `);
-    return (stmt.all(previousStage, stage) as ArticleRow[]).map(mapArticleRow);
+    rows = await query<ArticleRow>(
+      `SELECT a.* FROM articles a
+       INNER JOIN processing_log pl ON a.id = pl.article_id
+       WHERE pl.stage = $1 AND pl.status = 'success'
+       AND a.id NOT IN (
+         SELECT article_id FROM processing_log WHERE stage = $2
+       )
+       ORDER BY a.published_at DESC`,
+      [previousStage, stage]
+    );
   } else {
     // For 'scraped' stage, get articles not in processing_log at all
-    stmt = db.prepare(`
-      SELECT a.* FROM articles a
-      WHERE a.id NOT IN (
-        SELECT DISTINCT article_id FROM processing_log
-      )
-      ORDER BY a.published_at DESC
-    `);
-    return (stmt.all() as ArticleRow[]).map(mapArticleRow);
+    rows = await query<ArticleRow>(
+      `SELECT a.* FROM articles a
+       WHERE a.id NOT IN (
+         SELECT DISTINCT article_id FROM processing_log
+       )
+       ORDER BY a.published_at DESC`
+    );
   }
+  return rows.map(mapArticleRow);
 }
 
 /**
  * Get unsynced articles (summarized but not pushed to Notion)
  */
-export function getUnsyncedArticles(): Article[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT a.* FROM articles a
-    INNER JOIN processing_log pl ON a.id = pl.article_id
-    WHERE pl.stage = 'summarized' AND pl.status = 'success'
-    AND a.id NOT IN (SELECT article_id FROM notion_sync)
-    ORDER BY a.published_at DESC
-  `);
-  return (stmt.all() as ArticleRow[]).map(mapArticleRow);
+export async function getUnsyncedArticles(): Promise<Article[]> {
+  const rows = await query<ArticleRow>(
+    `SELECT a.* FROM articles a
+     INNER JOIN processing_log pl ON a.id = pl.article_id
+     WHERE pl.stage = 'summarized' AND pl.status = 'success'
+     AND a.id NOT IN (SELECT article_id FROM notion_sync)
+     ORDER BY a.published_at DESC`
+  );
+  return rows.map(mapArticleRow);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -171,46 +151,43 @@ export function getUnsyncedArticles(): Article[] {
 /**
  * Log processing status for an article
  */
-export function logProcessing(
+export async function logProcessing(
   articleId: string,
   stage: ProcessingStage,
   status: ProcessingStatus,
   errorMessage?: string
-): void {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO processing_log (article_id, stage, status, error_message)
-    VALUES (?, ?, ?, ?)
-  `);
-  stmt.run(articleId, stage, status, errorMessage ?? null);
+): Promise<void> {
+  await query(
+    `INSERT INTO processing_log (article_id, stage, status, error_message)
+     VALUES ($1, $2, $3, $4)`,
+    [articleId, stage, status, errorMessage ?? null]
+  );
 }
 
 /**
  * Get latest processing status for an article
  */
-export function getLatestProcessingStatus(articleId: string): ProcessingLog | null {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT * FROM processing_log
-    WHERE article_id = ?
-    ORDER BY processed_at DESC
-    LIMIT 1
-  `);
-  const row = stmt.get(articleId) as ProcessingLogRow | undefined;
+export async function getLatestProcessingStatus(articleId: string): Promise<ProcessingLog | null> {
+  const row = await queryOne<ProcessingLogRow>(
+    `SELECT * FROM processing_log
+     WHERE article_id = $1
+     ORDER BY processed_at DESC
+     LIMIT 1`,
+    [articleId]
+  );
   return row ? mapProcessingLogRow(row) : null;
 }
 
 /**
  * Get processing history for an article
  */
-export function getProcessingHistory(articleId: string): ProcessingLog[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT * FROM processing_log
-    WHERE article_id = ?
-    ORDER BY processed_at ASC
-  `);
-  const rows = stmt.all(articleId) as ProcessingLogRow[];
+export async function getProcessingHistory(articleId: string): Promise<ProcessingLog[]> {
+  const rows = await query<ProcessingLogRow>(
+    `SELECT * FROM processing_log
+     WHERE article_id = $1
+     ORDER BY processed_at ASC`,
+    [articleId]
+  );
   return rows.map(mapProcessingLogRow);
 }
 
@@ -221,32 +198,31 @@ export function getProcessingHistory(articleId: string): ProcessingLog[] {
 /**
  * Insert or update article summary
  */
-export function upsertSummary(
+export async function upsertSummary(
   articleId: string,
   shortSummary: string,
   detailedSummary?: string,
   tokensUsed?: number
-): void {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO summaries (article_id, short_summary, detailed_summary, tokens_used)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(article_id) DO UPDATE SET
-      short_summary = excluded.short_summary,
-      detailed_summary = excluded.detailed_summary,
-      tokens_used = excluded.tokens_used,
-      created_at = datetime('now')
-  `);
-  stmt.run(articleId, shortSummary, detailedSummary ?? null, tokensUsed ?? null);
+): Promise<void> {
+  await query(
+    `INSERT INTO summaries (article_id, short_summary, detailed_summary, tokens_used)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT(article_id) DO UPDATE SET
+       short_summary = EXCLUDED.short_summary,
+       detailed_summary = EXCLUDED.detailed_summary,
+       tokens_used = EXCLUDED.tokens_used,
+       created_at = NOW()`,
+    [articleId, shortSummary, detailedSummary ?? null, tokensUsed ?? null]
+  );
 }
 
 /**
  * Get summary for an article
  */
-export function getSummary(articleId: string): ArticleSummary | null {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT * FROM summaries WHERE article_id = ?');
-  const row = stmt.get(articleId) as SummaryRow | undefined;
+export async function getSummary(articleId: string): Promise<ArticleSummary | null> {
+  const row = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE article_id = $1', [
+    articleId,
+  ]);
   return row ? mapSummaryRow(row) : null;
 }
 
@@ -257,34 +233,32 @@ export function getSummary(articleId: string): ArticleSummary | null {
 /**
  * Record Notion sync for an article
  */
-export function recordNotionSync(articleId: string, notionPageId: string): void {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO notion_sync (article_id, notion_page_id)
-    VALUES (?, ?)
-    ON CONFLICT(article_id) DO UPDATE SET
-      notion_page_id = excluded.notion_page_id,
-      synced_at = datetime('now')
-  `);
-  stmt.run(articleId, notionPageId);
+export async function recordNotionSync(articleId: string, notionPageId: string): Promise<void> {
+  await query(
+    `INSERT INTO notion_sync (article_id, notion_page_id)
+     VALUES ($1, $2)
+     ON CONFLICT(article_id) DO UPDATE SET
+       notion_page_id = EXCLUDED.notion_page_id,
+       synced_at = NOW()`,
+    [articleId, notionPageId]
+  );
 }
 
 /**
  * Check if article is synced to Notion
  */
-export function isArticleSynced(articleId: string): boolean {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT 1 FROM notion_sync WHERE article_id = ?');
-  return stmt.get(articleId) !== undefined;
+export async function isArticleSynced(articleId: string): Promise<boolean> {
+  const row = await queryOne('SELECT 1 FROM notion_sync WHERE article_id = $1', [articleId]);
+  return row !== null;
 }
 
 /**
  * Get Notion sync info for an article
  */
-export function getNotionSync(articleId: string): NotionSync | null {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT * FROM notion_sync WHERE article_id = ?');
-  const row = stmt.get(articleId) as NotionSyncRow | undefined;
+export async function getNotionSync(articleId: string): Promise<NotionSync | null> {
+  const row = await queryOne<NotionSyncRow>('SELECT * FROM notion_sync WHERE article_id = $1', [
+    articleId,
+  ]);
   return row ? mapNotionSyncRow(row) : null;
 }
 
@@ -302,23 +276,16 @@ export interface DbStats {
 /**
  * Get database statistics
  */
-export function getStats(): DbStats {
-  const db = getDatabase();
+export async function getStats(): Promise<DbStats> {
+  const totalRow = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM articles');
+  const totalArticles = parseInt(totalRow?.count ?? '0', 10);
 
-  const totalArticles = (
-    db.prepare('SELECT COUNT(*) as count FROM articles').get() as { count: number }
-  ).count;
-
-  const stageCountsRaw = db
-    .prepare(
-      `
-    SELECT stage, COUNT(DISTINCT article_id) as count
-    FROM processing_log
-    WHERE status = 'success'
-    GROUP BY stage
-  `
-    )
-    .all() as { stage: ProcessingStage; count: number }[];
+  const stageCountsRaw = await query<{ stage: ProcessingStage; count: string }>(
+    `SELECT stage, COUNT(DISTINCT article_id) as count
+     FROM processing_log
+     WHERE status = 'success'
+     GROUP BY stage`
+  );
 
   const articlesByStage: Record<ProcessingStage, number> = {
     scraped: 0,
@@ -328,23 +295,65 @@ export function getStats(): DbStats {
   };
 
   for (const row of stageCountsRaw) {
-    articlesByStage[row.stage] = row.count;
+    articlesByStage[row.stage] = parseInt(row.count, 10);
   }
 
-  const articlesSynced = (
-    db.prepare('SELECT COUNT(*) as count FROM notion_sync').get() as { count: number }
-  ).count;
+  const syncedRow = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM notion_sync');
+  const articlesSynced = parseInt(syncedRow?.count ?? '0', 10);
 
-  const lastProcessedRow = db
-    .prepare('SELECT MAX(processed_at) as last FROM processing_log')
-    .get() as { last: string | null };
+  const lastProcessedRow = await queryOne<{ last: Date | null }>(
+    'SELECT MAX(processed_at) as last FROM processing_log'
+  );
 
   return {
     totalArticles,
     articlesByStage,
     articlesSynced,
-    lastProcessedAt: lastProcessedRow.last ? new Date(lastProcessedRow.last) : null,
+    lastProcessedAt: lastProcessedRow?.last ?? null,
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Daily Digest Queries
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface ArticleWithSummary {
+  article: Article;
+  summary: ArticleSummary;
+}
+
+/**
+ * Get today's synced articles with their summaries
+ */
+export async function getTodaySyncedArticles(): Promise<ArticleWithSummary[]> {
+  interface JoinedRow extends ArticleRow {
+    short_summary: string;
+    detailed_summary: string | null;
+    summary_created_at: Date;
+  }
+
+  const rows = await query<JoinedRow>(
+    `SELECT
+       a.*,
+       s.short_summary,
+       s.detailed_summary,
+       s.created_at as summary_created_at
+     FROM articles a
+     INNER JOIN notion_sync ns ON a.id = ns.article_id
+     INNER JOIN summaries s ON a.id = s.article_id
+     WHERE DATE(ns.synced_at AT TIME ZONE 'Europe/Paris') = CURRENT_DATE
+     ORDER BY a.published_at DESC`
+  );
+
+  return rows.map((row) => ({
+    article: mapArticleRow(row),
+    summary: {
+      articleId: row.id,
+      shortSummary: row.short_summary,
+      detailedSummary: row.detailed_summary ?? undefined,
+      createdAt: new Date(row.summary_created_at),
+    },
+  }));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -363,9 +372,9 @@ interface ArticleRow {
   title: string;
   url: string;
   content: string | null;
-  published_at: string;
+  published_at: Date;
   source: string;
-  created_at: string;
+  created_at: Date;
 }
 
 interface ProcessingLogRow {
@@ -374,7 +383,7 @@ interface ProcessingLogRow {
   stage: string;
   status: string;
   error_message: string | null;
-  processed_at: string;
+  processed_at: Date;
 }
 
 interface SummaryRow {
@@ -382,13 +391,13 @@ interface SummaryRow {
   short_summary: string;
   detailed_summary: string | null;
   tokens_used: number | null;
-  created_at: string;
+  created_at: Date;
 }
 
 interface NotionSyncRow {
   article_id: string;
   notion_page_id: string;
-  synced_at: string;
+  synced_at: Date;
 }
 
 // Mappers
@@ -430,51 +439,4 @@ function mapNotionSyncRow(row: NotionSyncRow): NotionSync {
     notionPageId: row.notion_page_id,
     syncedAt: new Date(row.synced_at),
   };
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Daily Digest Queries
-// ═══════════════════════════════════════════════════════════════════════════════
-
-export interface ArticleWithSummary {
-  article: Article;
-  summary: ArticleSummary;
-}
-
-/**
- * Get today's synced articles with their summaries
- */
-export function getTodaySyncedArticles(): ArticleWithSummary[] {
-  const db = getDatabase();
-
-  const stmt = db.prepare(`
-    SELECT
-      a.*,
-      s.short_summary,
-      s.detailed_summary,
-      s.created_at as summary_created_at
-    FROM articles a
-    INNER JOIN notion_sync ns ON a.id = ns.article_id
-    INNER JOIN summaries s ON a.id = s.article_id
-    WHERE date(ns.synced_at) = date('now', 'localtime')
-    ORDER BY a.published_at DESC
-  `);
-
-  interface JoinedRow extends ArticleRow {
-    short_summary: string;
-    detailed_summary: string | null;
-    summary_created_at: string;
-  }
-
-  const rows = stmt.all() as JoinedRow[];
-
-  return rows.map((row) => ({
-    article: mapArticleRow(row),
-    summary: {
-      articleId: row.id,
-      shortSummary: row.short_summary,
-      detailedSummary: row.detailed_summary ?? undefined,
-      createdAt: new Date(row.summary_created_at),
-    },
-  }));
 }

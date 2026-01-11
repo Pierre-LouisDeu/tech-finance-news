@@ -1,12 +1,12 @@
 /**
  * Daily Briefing Module
  *
- * Manages daily briefing archive in SQLite and Notion
+ * Manages daily briefing archive in PostgreSQL and Notion
  * Provides structured navigation through daily summaries
  */
 
 import { Client } from '@notionhq/client';
-import { getDatabase } from '../db/index.js';
+import { query, queryOne } from '../db/index.js';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import type { DailyDigest } from './index.js';
@@ -40,41 +40,32 @@ export interface BriefingArticle {
 /**
  * Check if briefing already exists for a date
  */
-export function briefingExists(date: string): boolean {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT 1 FROM daily_briefings WHERE date = ?');
-  return stmt.get(date) !== undefined;
+export async function briefingExists(date: string): Promise<boolean> {
+  const row = await queryOne('SELECT 1 FROM daily_briefings WHERE date = $1', [date]);
+  return row !== null;
 }
 
 /**
  * Get briefing by date
  */
-export function getBriefing(date: string): DailyBriefing | null {
-  const db = getDatabase();
-  const stmt = db.prepare('SELECT * FROM daily_briefings WHERE date = ?');
-  const row = stmt.get(date) as BriefingRow | undefined;
+export async function getBriefing(date: string): Promise<DailyBriefing | null> {
+  const row = await queryOne<BriefingRow>('SELECT * FROM daily_briefings WHERE date = $1', [date]);
   return row ? mapBriefingRow(row) : null;
 }
 
 /**
  * Save or update briefing in database
  */
-export function saveBriefing(briefing: DailyBriefing): void {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    INSERT INTO daily_briefings (date, article_count, global_summary, notion_page_id)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(date) DO UPDATE SET
-      article_count = excluded.article_count,
-      global_summary = excluded.global_summary,
-      notion_page_id = COALESCE(excluded.notion_page_id, notion_page_id),
-      created_at = datetime('now')
-  `);
-  stmt.run(
-    briefing.date,
-    briefing.articleCount,
-    briefing.globalSummary,
-    briefing.notionPageId ?? null
+export async function saveBriefing(briefing: DailyBriefing): Promise<void> {
+  await query(
+    `INSERT INTO daily_briefings (date, article_count, global_summary, notion_page_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT(date) DO UPDATE SET
+       article_count = EXCLUDED.article_count,
+       global_summary = EXCLUDED.global_summary,
+       notion_page_id = COALESCE(EXCLUDED.notion_page_id, daily_briefings.notion_page_id),
+       created_at = NOW()`,
+    [briefing.date, briefing.articleCount, briefing.globalSummary, briefing.notionPageId ?? null]
   );
   logger.debug({ date: briefing.date }, 'Briefing saved to database');
 }
@@ -82,23 +73,23 @@ export function saveBriefing(briefing: DailyBriefing): void {
 /**
  * Update briefing with Notion page ID
  */
-export function updateBriefingNotionId(date: string, notionPageId: string): void {
-  const db = getDatabase();
-  const stmt = db.prepare('UPDATE daily_briefings SET notion_page_id = ? WHERE date = ?');
-  stmt.run(notionPageId, date);
+export async function updateBriefingNotionId(date: string, notionPageId: string): Promise<void> {
+  await query('UPDATE daily_briefings SET notion_page_id = $1 WHERE date = $2', [
+    notionPageId,
+    date,
+  ]);
 }
 
 /**
  * Get recent briefings for navigation
  */
-export function getRecentBriefings(limit: number = 30): DailyBriefing[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT * FROM daily_briefings
-    ORDER BY date DESC
-    LIMIT ?
-  `);
-  const rows = stmt.all(limit) as BriefingRow[];
+export async function getRecentBriefings(limit: number = 30): Promise<DailyBriefing[]> {
+  const rows = await query<BriefingRow>(
+    `SELECT * FROM daily_briefings
+     ORDER BY date DESC
+     LIMIT $1`,
+    [limit]
+  );
   return rows.map(mapBriefingRow);
 }
 
@@ -109,22 +100,7 @@ export function getRecentBriefings(limit: number = 30): DailyBriefing[] {
 /**
  * Get articles with their Notion page IDs for linking
  */
-export function getArticlesWithNotionIds(date: string): BriefingArticle[] {
-  const db = getDatabase();
-  const stmt = db.prepare(`
-    SELECT
-      a.title,
-      a.url,
-      a.source,
-      s.short_summary,
-      ns.notion_page_id
-    FROM articles a
-    INNER JOIN notion_sync ns ON a.id = ns.article_id
-    INNER JOIN summaries s ON a.id = s.article_id
-    WHERE date(ns.synced_at) = ?
-    ORDER BY a.published_at DESC
-  `);
-
+export async function getArticlesWithNotionIds(date: string): Promise<BriefingArticle[]> {
   interface ArticleRow {
     title: string;
     url: string;
@@ -133,7 +109,20 @@ export function getArticlesWithNotionIds(date: string): BriefingArticle[] {
     notion_page_id: string;
   }
 
-  const rows = stmt.all(date) as ArticleRow[];
+  const rows = await query<ArticleRow>(
+    `SELECT
+       a.title,
+       a.url,
+       a.source,
+       s.short_summary,
+       ns.notion_page_id
+     FROM articles a
+     INNER JOIN notion_sync ns ON a.id = ns.article_id
+     INNER JOIN summaries s ON a.id = s.article_id
+     WHERE DATE(ns.synced_at AT TIME ZONE 'Europe/Paris') = $1::date
+     ORDER BY a.published_at DESC`,
+    [date]
+  );
 
   return rows.map((row) => ({
     title: row.title,
@@ -270,7 +259,9 @@ export async function createNotionBriefingPage(
           object: 'block',
           type: 'heading_2',
           heading_2: {
-            rich_text: [{ type: 'text', text: { content: `Articles du jour (${articles.length})` } }],
+            rich_text: [
+              { type: 'text', text: { content: `Articles du jour (${articles.length})` } },
+            ],
           },
         },
         // Article list with links
@@ -315,16 +306,17 @@ export async function createNotionBriefingPage(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 interface BriefingRow {
-  date: string;
+  date: Date;
   article_count: number;
   global_summary: string;
   notion_page_id: string | null;
-  created_at: string;
+  created_at: Date;
 }
 
 function mapBriefingRow(row: BriefingRow): DailyBriefing {
   return {
-    date: row.date,
+    date:
+      row.date instanceof Date ? row.date.toISOString().split('T')[0]! : String(row.date),
     articleCount: row.article_count,
     globalSummary: row.global_summary,
     notionPageId: row.notion_page_id ?? undefined,

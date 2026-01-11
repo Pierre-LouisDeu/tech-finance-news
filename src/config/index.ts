@@ -32,17 +32,12 @@ export const config = {
   },
 
   database: {
-    path: env.DB_PATH,
+    url: env.DATABASE_URL,
   },
 
   logging: {
     level: env.LOG_LEVEL,
     file: env.LOG_FILE,
-  },
-
-  scheduler: {
-    cronExpression: env.CRON_SCHEDULE,
-    timezone: env.TZ,
   },
 
   keywords: TECH_KEYWORDS,

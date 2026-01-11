@@ -14,8 +14,8 @@ async function testScraper(): Promise<void> {
 
   try {
     // Initialize database
-    initDatabase();
-    const statsBefore = getStats();
+    await initDatabase();
+    const statsBefore = await getStats();
     logger.info({ articles: statsBefore.totalArticles }, 'Database state before scraping');
 
     // Scrape Zone Bourse
@@ -53,7 +53,7 @@ async function testScraper(): Promise<void> {
     }
 
     // Check database after
-    const statsAfter = getStats();
+    const statsAfter = await getStats();
     logger.info(
       {
         before: statsBefore.totalArticles,
@@ -68,7 +68,7 @@ async function testScraper(): Promise<void> {
     logger.error({ error }, 'Scraper test failed');
     throw error;
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 }
 

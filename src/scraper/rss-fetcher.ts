@@ -90,7 +90,7 @@ async function fetchFeed(
       }
 
       // Skip if already exists
-      if (articleExistsByUrl(item.link)) {
+      if (await articleExistsByUrl(item.link)) {
         logger.debug({ url: item.link }, 'Article already exists, skipping');
         continue;
       }

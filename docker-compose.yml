@@ -1,27 +1,53 @@
 # Tech Finance News Aggregator
 # Docker Compose configuration for production deployment
+#
+# Note: In production (Dokploy), the app connects to an external PostgreSQL database
+# and is triggered via server crontab. This compose file is for local development.
 
 version: '3.8'
 
 services:
+  # PostgreSQL database (for local development)
+  db:
+    image: postgres:16-alpine
+    container_name: tech-finance-news-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: techfinance
+      POSTGRES_PASSWORD: techfinance_dev
+      POSTGRES_DB: techfinance
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U techfinance -d techfinance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Application
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: tech-finance-news
-    restart: unless-stopped
+    restart: "no"  # One-shot execution, managed by cron
+    depends_on:
+      db:
+        condition: service_healthy
 
     # Environment variables
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - DB_PATH=/app/data/news.db
+      - DATABASE_URL=postgresql://techfinance:techfinance_dev@db:5432/techfinance
       - TZ=Europe/Paris
 
-    # Persistent data
+    # Logs volume
     volumes:
-      - app-data:/app/data
       - app-logs:/app/logs
 
     # Resource limits
@@ -41,16 +67,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    # Health check
-    healthcheck:
-      test: ["CMD", "node", "-e", "console.log('healthy')"]
-      interval: 5m
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
 volumes:
-  app-data:
+  postgres-data:
     driver: local
   app-logs:
     driver: local

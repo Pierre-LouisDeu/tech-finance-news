@@ -19,15 +19,14 @@ const envSchema = z.object({
   SCRAPE_RATE_LIMIT_MS: z.coerce.number().default(2000),
   USER_AGENT: z.string().default('Mozilla/5.0 (compatible; TechNewsBot/1.0)'),
 
-  // Database
-  DB_PATH: z.string().default('./data/news.db'),
+  // Database (PostgreSQL)
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
   // Logging
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   LOG_FILE: z.string().default('./logs/app.log'),
 
-  // Scheduling
-  CRON_SCHEDULE: z.string().default('0 8,11,14,17,20 * * 1-5'),
+  // Timezone
   TZ: z.string().default('Europe/Paris'),
 
   // Environment

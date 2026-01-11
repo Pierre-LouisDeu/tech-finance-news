@@ -1,77 +1,122 @@
 /**
- * SQLite Database Connection
+ * PostgreSQL Database Connection
  */
 
-import Database from 'better-sqlite3';
-import { existsSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { Pool, PoolClient, QueryResult } from 'pg';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { config } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { SCHEMA, MIGRATIONS } from './schema.js';
 
-let db: Database.Database | null = null;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+let pool: Pool | null = null;
 
 /**
- * Get or create database connection
+ * Get or create database pool
  */
-export function getDatabase(): Database.Database {
-  if (!db) {
+export function getPool(): Pool {
+  if (!pool) {
     throw new Error('Database not initialized. Call initDatabase() first.');
   }
-  return db;
+  return pool;
 }
 
 /**
- * Initialize database connection and schema
+ * Initialize database connection pool and schema
  */
-export function initDatabase(): Database.Database {
-  if (db) {
-    logger.debug('Database already initialized');
-    return db;
+export async function initDatabase(): Promise<void> {
+  if (pool) {
+    logger.debug('Database pool already initialized');
+    return;
   }
 
-  const dbPath = config.database.path;
+  pool = new Pool({
+    connectionString: config.database.url,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
 
-  // Ensure data directory exists
-  const dataDir = dirname(dbPath);
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-    logger.info({ path: dataDir }, 'Created data directory');
+  // Test connection
+  try {
+    const client = await pool.connect();
+    logger.info('Database connection established');
+    client.release();
+  } catch (error) {
+    logger.fatal({ error }, 'Failed to connect to database');
+    throw error;
   }
-
-  // Create database connection
-  db = new Database(dbPath);
-
-  // Enable foreign keys
-  db.pragma('foreign_keys = ON');
-
-  // Enable WAL mode for better concurrent access
-  db.pragma('journal_mode = WAL');
 
   // Initialize schema
-  db.exec(SCHEMA);
-  logger.info({ path: dbPath }, 'Database schema initialized');
-
-  // Run migrations
-  for (const migration of MIGRATIONS) {
-    db.exec(migration);
-  }
-
-  if (MIGRATIONS.length > 0) {
-    logger.info({ count: MIGRATIONS.length }, 'Database migrations applied');
-  }
-
-  return db;
+  await initSchema();
 }
 
 /**
- * Close database connection
+ * Initialize database schema
  */
-export function closeDatabase(): void {
-  if (db) {
-    db.close();
-    db = null;
-    logger.info('Database connection closed');
+async function initSchema(): Promise<void> {
+  const schemaPath = join(__dirname, 'schema.sql');
+  const schema = readFileSync(schemaPath, 'utf-8');
+
+  try {
+    await pool!.query(schema);
+    logger.info('Database schema initialized');
+  } catch (error) {
+    logger.error({ error }, 'Failed to initialize schema');
+    throw error;
+  }
+}
+
+/**
+ * Execute a query and return rows
+ */
+export async function query<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<T[]> {
+  const result = await pool!.query(text, params);
+  return result.rows as T[];
+}
+
+/**
+ * Execute a query and return full result
+ */
+export async function queryResult(
+  text: string,
+  params?: unknown[]
+): Promise<QueryResult> {
+  return pool!.query(text, params);
+}
+
+/**
+ * Execute a query and return first row or null
+ */
+export async function queryOne<T = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<T | null> {
+  const result = await pool!.query(text, params);
+  return (result.rows[0] as T) ?? null;
+}
+
+/**
+ * Get a client from the pool for transactions
+ */
+export async function getClient(): Promise<PoolClient> {
+  return pool!.connect();
+}
+
+/**
+ * Close database connection pool
+ */
+export async function closeDatabase(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+    logger.info('Database connection pool closed');
   }
 }
 
@@ -79,7 +124,7 @@ export function closeDatabase(): void {
  * Check if database is initialized
  */
 export function isDatabaseInitialized(): boolean {
-  return db !== null;
+  return pool !== null;
 }
 
-export { Database };
+export { Pool, PoolClient };

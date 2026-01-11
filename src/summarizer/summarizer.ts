@@ -138,7 +138,7 @@ export async function summarizeAndSave(article: Article): Promise<SummaryResult 
     const result = await summarizeArticle(article);
 
     // Save to database
-    upsertSummary(
+    await upsertSummary(
       article.id,
       result.shortSummary,
       result.detailedSummary,
@@ -146,7 +146,7 @@ export async function summarizeAndSave(article: Article): Promise<SummaryResult 
     );
 
     // Log successful processing
-    logProcessing(article.id, 'summarized', 'success');
+    await logProcessing(article.id, 'summarized', 'success');
 
     logger.info(
       { articleId: article.id, tokensUsed: result.tokensUsed },
@@ -156,7 +156,7 @@ export async function summarizeAndSave(article: Article): Promise<SummaryResult 
     return result;
   } catch (error) {
     logger.error({ error, articleId: article.id }, 'Failed to summarize article');
-    logProcessing(article.id, 'summarized', 'failed', String(error));
+    await logProcessing(article.id, 'summarized', 'failed', String(error));
     return null;
   }
 }

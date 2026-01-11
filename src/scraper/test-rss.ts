@@ -14,8 +14,8 @@ async function testRssFetcher(): Promise<void> {
 
   try {
     // Initialize database
-    initDatabase();
-    const statsBefore = getStats();
+    await initDatabase();
+    const statsBefore = await getStats();
     logger.info({ articles: statsBefore.totalArticles }, 'Database state before fetching');
 
     // Show configured feeds
@@ -59,7 +59,7 @@ async function testRssFetcher(): Promise<void> {
     }
 
     // Check database after
-    const statsAfter = getStats();
+    const statsAfter = await getStats();
     logger.info(
       {
         before: statsBefore.totalArticles,
@@ -74,7 +74,7 @@ async function testRssFetcher(): Promise<void> {
     logger.error({ error }, 'RSS fetcher test failed');
     throw error;
   } finally {
-    closeDatabase();
+    await closeDatabase();
   }
 }
 
