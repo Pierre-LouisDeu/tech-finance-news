@@ -9,9 +9,9 @@
  * 5. Pushes results to Notion database
  *
  * Usage:
- *   npm run dev          - Run once with watch mode
- *   npm run pipeline     - Run pipeline once
- *   node dist/index.js   - Run pipeline once (production)
+ *   node dist/index.js --service  - Run as service (stays alive for scheduler)
+ *   node dist/index.js --run      - Run pipeline once and exit
+ *   node dist/index.js            - Default: service mode
  */
 
 import { config } from './config/index.js';
@@ -20,13 +20,38 @@ import { initDatabase, closeDatabase } from './db/index.js';
 import { getStats } from './db/queries.js';
 import { runPipeline } from './pipeline.js';
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const isRunOnce = args.includes('--run');
+const isService = args.includes('--service') || !isRunOnce;
+
+async function executePipeline(): Promise<void> {
+  try {
+    const result = await runPipeline({ maxArticles: 20 });
+
+    logger.info('');
+    logger.info('Pipeline Complete:');
+    logger.info(`  ✓ Scraped:    ${result.scraped} articles`);
+    logger.info(`  ✓ Filtered:   ${result.filtered} articles`);
+    logger.info(`  ✓ Summarized: ${result.summarized} articles`);
+    logger.info(`  ✓ Pushed:     ${result.pushed} articles`);
+    if (result.errors > 0) {
+      logger.info(`  ⚠ Errors:     ${result.errors}`);
+    }
+    logger.info(`  ⏱ Duration:   ${(result.durationMs / 1000).toFixed(1)}s`);
+  } catch (error) {
+    logger.error({ error }, 'Pipeline failed');
+    throw error;
+  }
+}
+
 async function main(): Promise<void> {
   logger.info('');
   logger.info('╔═══════════════════════════════════════════════════╗');
   logger.info('║       Tech Finance News Aggregator                ║');
   logger.info('╚═══════════════════════════════════════════════════╝');
   logger.info('');
-  logger.info({ env: config.app.env }, 'Starting application');
+  logger.info({ env: config.app.env, mode: isService ? 'service' : 'run-once' }, 'Starting application');
 
   // Initialize database
   try {
@@ -56,27 +81,26 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 
-  // Run pipeline once and exit
-  try {
-    const result = await runPipeline({ maxArticles: 20 });
-
-    logger.info('');
-    logger.info('Pipeline Complete:');
-    logger.info(`  ✓ Scraped:    ${result.scraped} articles`);
-    logger.info(`  ✓ Filtered:   ${result.filtered} articles`);
-    logger.info(`  ✓ Summarized: ${result.summarized} articles`);
-    logger.info(`  ✓ Pushed:     ${result.pushed} articles`);
-    if (result.errors > 0) {
-      logger.info(`  ⚠ Errors:     ${result.errors}`);
+  if (isRunOnce) {
+    // Run pipeline once and exit
+    try {
+      await executePipeline();
+    } catch {
+      await closeDatabase();
+      process.exit(1);
     }
-    logger.info(`  ⏱ Duration:   ${(result.durationMs / 1000).toFixed(1)}s`);
-  } catch (error) {
-    logger.fatal({ error }, 'Pipeline failed');
     await closeDatabase();
-    process.exit(1);
-  }
+  } else {
+    // Service mode: stay alive for Dokploy scheduler
+    logger.info('Running in service mode - waiting for scheduler triggers');
+    logger.info('Use "node dist/index.js --run" to execute pipeline manually');
 
-  await closeDatabase();
+    // Keep the process alive
+    // The Dokploy scheduler will execute commands via docker exec
+    setInterval(() => {
+      logger.debug('Service heartbeat');
+    }, 60000); // Heartbeat every minute
+  }
 }
 
 main().catch((error: unknown) => {

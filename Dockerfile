@@ -74,6 +74,6 @@ USER appuser
 ENV NODE_ENV=production
 ENV LOG_LEVEL=info
 
-# Default command: one-shot pipeline execution
-# Triggered by server crontab, connects to external PostgreSQL
-CMD ["node", "dist/index.js", "--run"]
+# Default command: service mode (stays alive for Dokploy scheduler)
+# Scheduler executes: node dist/index.js --run
+CMD ["node", "dist/index.js"]
