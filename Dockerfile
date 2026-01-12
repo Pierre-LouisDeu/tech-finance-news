@@ -61,6 +61,9 @@ RUN npx playwright install chromium
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
+# Copy SQL schema file (not included by TypeScript compilation)
+COPY src/db/schema.sql ./dist/db/schema.sql
+
 # Create logs directory
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
 
