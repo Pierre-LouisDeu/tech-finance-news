@@ -35,6 +35,13 @@ export async function initBrowser(options: BrowserOptions = {}): Promise<Browser
 
   browser = await chromium.launch({
     headless,
+    // Required for Docker/containerized environments
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
   });
 
   // Create default context with realistic browser fingerprint
