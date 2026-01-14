@@ -356,6 +356,68 @@ export async function getTodaySyncedArticles(): Promise<ArticleWithSummary[]> {
   }));
 }
 
+/**
+ * Get synced articles with summaries for a date range
+ */
+export async function getSyncedArticlesByDateRange(
+  startDate: string,
+  endDate: string
+): Promise<ArticleWithSummary[]> {
+  interface JoinedRow extends ArticleRow {
+    short_summary: string;
+    detailed_summary: string | null;
+    summary_created_at: Date;
+  }
+
+  const rows = await query<JoinedRow>(
+    `SELECT
+       a.*,
+       s.short_summary,
+       s.detailed_summary,
+       s.created_at as summary_created_at
+     FROM articles a
+     INNER JOIN notion_sync ns ON a.id = ns.article_id
+     INNER JOIN summaries s ON a.id = s.article_id
+     WHERE DATE(ns.synced_at AT TIME ZONE 'Europe/Paris') >= $1::date
+       AND DATE(ns.synced_at AT TIME ZONE 'Europe/Paris') <= $2::date
+     ORDER BY a.published_at DESC`,
+    [startDate, endDate]
+  );
+
+  return rows.map((row) => ({
+    article: mapArticleRow(row),
+    summary: {
+      articleId: row.id,
+      shortSummary: row.short_summary,
+      detailedSummary: row.detailed_summary ?? undefined,
+      createdAt: new Date(row.summary_created_at),
+    },
+  }));
+}
+
+/**
+ * Get synced articles with summaries for a specific week (ISO week, Monday to Sunday)
+ */
+export async function getWeeklySyncedArticles(weekStartDate: string): Promise<ArticleWithSummary[]> {
+  const weekEnd = new Date(weekStartDate);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekEndDate = weekEnd.toISOString().split('T')[0]!;
+
+  return getSyncedArticlesByDateRange(weekStartDate, weekEndDate);
+}
+
+/**
+ * Get synced articles with summaries for a specific month
+ */
+export async function getMonthlySyncedArticles(yearMonth: string): Promise<ArticleWithSummary[]> {
+  const [year, month] = yearMonth.split('-').map(Number) as [number, number];
+  const startDate = `${yearMonth}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDate = `${yearMonth}-${lastDay.toString().padStart(2, '0')}`;
+
+  return getSyncedArticlesByDateRange(startDate, endDate);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Helper Functions
 // ═══════════════════════════════════════════════════════════════════════════════

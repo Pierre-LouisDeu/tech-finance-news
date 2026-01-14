@@ -7,10 +7,13 @@
  * 3. Filters articles using tech keyword matching
  * 4. Summarizes content with OpenAI GPT-4o-mini
  * 5. Pushes results to Notion database
+ * 6. Generates daily/weekly/monthly briefings
  *
  * Usage:
  *   node dist/index.js --service  - Run as service (stays alive for scheduler)
  *   node dist/index.js --run      - Run pipeline once and exit
+ *   node dist/index.js --run --weekly  - Run pipeline + weekly digest
+ *   node dist/index.js --run --monthly - Run pipeline + monthly digest
  *   node dist/index.js            - Default: service mode
  */
 
@@ -24,10 +27,16 @@ import { runPipeline } from './pipeline.js';
 const args = process.argv.slice(2);
 const isRunOnce = args.includes('--run');
 const isService = args.includes('--service') || !isRunOnce;
+const runWeekly = args.includes('--weekly');
+const runMonthly = args.includes('--monthly');
 
 async function executePipeline(): Promise<void> {
   try {
-    const result = await runPipeline({ maxArticles: 20 });
+    const result = await runPipeline({
+      maxArticles: 20,
+      runWeeklyDigest: runWeekly,
+      runMonthlyDigest: runMonthly,
+    });
 
     logger.info('');
     logger.info('Pipeline Complete:');

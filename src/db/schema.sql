@@ -63,6 +63,31 @@ CREATE TABLE IF NOT EXISTS daily_briefings (
 );
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- Weekly Briefings Table
+-- Stores weekly digest summaries for archive/navigation
+-- ═══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS weekly_briefings (
+  week_start DATE PRIMARY KEY,  -- ISO week start (Monday)
+  week_end DATE NOT NULL,
+  article_count INTEGER NOT NULL DEFAULT 0,
+  global_summary TEXT NOT NULL,
+  notion_page_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- Monthly Briefings Table
+-- Stores monthly digest summaries for archive/navigation
+-- ═══════════════════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS monthly_briefings (
+  year_month VARCHAR(7) PRIMARY KEY,  -- YYYY-MM format
+  article_count INTEGER NOT NULL DEFAULT 0,
+  global_summary TEXT NOT NULL,
+  notion_page_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- Indexes for Performance
 -- ═══════════════════════════════════════════════════════════════════════════════
 CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at DESC);
@@ -72,3 +97,5 @@ CREATE INDEX IF NOT EXISTS idx_processing_log_stage_status ON processing_log(sta
 CREATE INDEX IF NOT EXISTS idx_processing_log_processed_at ON processing_log(processed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notion_sync_synced_at ON notion_sync(synced_at DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_briefings_date ON daily_briefings(date DESC);
+CREATE INDEX IF NOT EXISTS idx_weekly_briefings_week ON weekly_briefings(week_start DESC);
+CREATE INDEX IF NOT EXISTS idx_monthly_briefings_month ON monthly_briefings(year_month DESC);

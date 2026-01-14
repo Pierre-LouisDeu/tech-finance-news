@@ -360,17 +360,41 @@ LOG_LEVEL=info
 LOG_FILE=./logs/app.log
 ```
 
-### Scheduling
+### Scheduling (Dokploy Cron)
 
-```typescript
-// Exécution toutes les 3 heures, 8h-20h (heures de marché Europe)
-// Cron: "0 8,11,14,17,20 * * 1-5"
+L'application utilise le scheduler cron de Dokploy pour l'execution. Le service reste actif en mode service et les pipelines sont declenches via `--run`.
 
-const SCHEDULE = {
-  expression: '0 8,11,14,17,20 * * 1-5',  // Lun-Ven, 5 fois/jour
-  timezone: 'Europe/Paris'
-};
+**Configuration recommandee:**
+
+```bash
+# Pipeline quotidien (une fois par jour a 8h, heures de marche Europe)
+0 8 * * 1-5 docker compose run --rm app node dist/index.js --run
+
+# Briefing hebdomadaire (lundi a 9h, resume de la semaine precedente)
+0 9 * * 1 docker compose run --rm app node dist/index.js --run --weekly
+
+# Briefing mensuel (1er du mois a 9h, resume du mois precedent)
+0 9 1 * * docker compose run --rm app node dist/index.js --run --monthly
 ```
+
+**Options disponibles:**
+
+| Flag | Description |
+|------|-------------|
+| `--run` | Execute le pipeline une fois et quitte |
+| `--weekly` | Genere le briefing hebdomadaire (semaine precedente) |
+| `--monthly` | Genere le briefing mensuel (mois precedent) |
+| `--dry-run` | Mode simulation, pas de modification |
+| `--skip-scrape` | Ignore l'etape de scraping |
+| `--skip-push` | Ignore l'envoi vers Notion |
+
+**Types de briefings:**
+
+| Type | Frequence | Contenu |
+|------|-----------|---------|
+| **Daily** | Automatique apres chaque pipeline | Resume des articles du jour |
+| **Weekly** | Manuel via `--weekly` | Synthese hebdomadaire, tendances |
+| **Monthly** | Manuel via `--monthly` | Analyse mensuelle, perspectives |
 
 ---
 

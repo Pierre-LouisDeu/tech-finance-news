@@ -15,6 +15,8 @@ import { filterArticles } from './filter/index.js';
 import { summarizeArticles, isSummarizationAvailable } from './summarizer/index.js';
 import { pushArticlesToNotion, isNotionAvailable } from './notion/index.js';
 import { runDailyDigest } from './digest/index.js';
+import { runWeeklyDigest } from './digest/weekly-digest.js';
+import { runMonthlyDigest } from './digest/monthly-digest.js';
 import { initDatabase, closeDatabase } from './db/index.js';
 import {
   getArticlesWithEmptyContent,
@@ -37,6 +39,8 @@ export interface PipelineOptions {
   skipSummarize?: boolean;
   skipPush?: boolean;
   dryRun?: boolean;
+  runWeeklyDigest?: boolean;
+  runMonthlyDigest?: boolean;
 }
 
 /**
@@ -51,6 +55,8 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
     skipSummarize = false,
     skipPush = false,
     dryRun = false,
+    runWeeklyDigest: shouldRunWeeklyDigest = false,
+    runMonthlyDigest: shouldRunMonthlyDigest = false,
   } = options;
 
   const startTime = Date.now();
@@ -201,6 +207,38 @@ export async function runPipeline(options: PipelineOptions = {}): Promise<Pipeli
       }
     }
 
+    // Step 7: Generate weekly digest (if requested)
+    if (shouldRunWeeklyDigest && !dryRun) {
+      logger.info('Step 7: Generating weekly digest...');
+
+      const weeklyResult = await runWeeklyDigest();
+
+      if (weeklyResult.success) {
+        logger.info(
+          { notionPageId: weeklyResult.notionPageId },
+          'Weekly digest complete'
+        );
+      } else {
+        logger.warn({ error: weeklyResult.error }, 'Weekly digest failed');
+      }
+    }
+
+    // Step 8: Generate monthly digest (if requested)
+    if (shouldRunMonthlyDigest && !dryRun) {
+      logger.info('Step 8: Generating monthly digest...');
+
+      const monthlyResult = await runMonthlyDigest();
+
+      if (monthlyResult.success) {
+        logger.info(
+          { notionPageId: monthlyResult.notionPageId },
+          'Monthly digest complete'
+        );
+      } else {
+        logger.warn({ error: monthlyResult.error }, 'Monthly digest failed');
+      }
+    }
+
     // Final stats
     const stats = await getStats();
     result.durationMs = Date.now() - startTime;
@@ -239,6 +277,8 @@ async function main(): Promise<void> {
     skipFilter: args.includes('--skip-filter'),
     skipSummarize: args.includes('--skip-summarize'),
     skipPush: args.includes('--skip-push'),
+    runWeeklyDigest: args.includes('--weekly'),
+    runMonthlyDigest: args.includes('--monthly'),
   };
 
   // Parse --max-articles=N
