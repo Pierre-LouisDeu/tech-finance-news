@@ -55,20 +55,23 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 COPY package*.json ./
 RUN npm ci --omit=dev
 
+# Set Playwright browsers path to a shared location
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/browsers
+
+# Install Playwright browsers to shared location
+RUN mkdir -p /app/browsers && npx playwright install chromium
+
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
 # Copy SQL schema file (not included by TypeScript compilation)
 COPY src/db/schema.sql ./dist/db/schema.sql
 
-# Create logs directory and set permissions
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+# Create logs directory and set permissions for appuser
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app /app/browsers
 
-# Switch to non-root user BEFORE installing Playwright
+# Switch to non-root user
 USER appuser
-
-# Install Playwright browsers as appuser (so browser is accessible at runtime)
-RUN npx playwright install chromium
 
 # Environment variables
 ENV NODE_ENV=production
